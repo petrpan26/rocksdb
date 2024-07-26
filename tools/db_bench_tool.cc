@@ -91,6 +91,7 @@
 #include "utilities/merge_operators/bytesxor.h"
 #include "utilities/merge_operators/sortlist.h"
 #include "utilities/persistent_cache/block_cache_tier.h"
+#include "plugin/fennel_encryption/ippcp_provider.h"
 
 #ifdef MEMKIND
 #include "memory/memkind_kmem_allocator.h"
@@ -8645,12 +8646,10 @@ int db_bench_tool(int argc, char** argv) {
   }
 
   if (env_opts == 1) {
-    Status s = Env::CreateFromUri(config_options, FLAGS_env_uri, FLAGS_fs_uri,
-                                  &FLAGS_env, &env_guard);
-    if (!s.ok()) {
-      fprintf(stderr, "Failed creating env: %s\n", s.ToString().c_str());
-      exit(1);
-    }
+
+  auto encryption_provider =
+    std::make_shared<AESEncryptionProvider>("a6d2ae2816157e2b3c4fcf098815f7xb", EncryptionMethod::kAES256_CTR);
+  FLAGS_env = NewEncryptedEnv(FLAGS_env, encryption_provider);
   } else if (FLAGS_simulate_hdd || FLAGS_simulate_hybrid_fs_file != "") {
     //**TODO: Make the simulate fs something that can be loaded
     // from the ObjectRegistry...
