@@ -26,6 +26,7 @@
 #include "db_stress_tool/db_stress_shared_state.h"
 #include "rocksdb/convenience.h"
 #include "utilities/fault_injection_fs.h"
+#include "plugin/fennel_encryption/ippcp_provider.h"
 
 namespace ROCKSDB_NAMESPACE {
 namespace {
@@ -68,17 +69,21 @@ int db_stress_tool(int argc, char** argv) {
 
   int env_opts = !FLAGS_env_uri.empty() + !FLAGS_fs_uri.empty();
   if (env_opts > 1) {
-    fprintf(stderr, "Error: --env_uri and --fs_uri are mutually exclusive\n");
-    exit(1);
-  }
+  auto encryption_provider =
+    std::make_shared<ROCKSDB_NAMESPACE::AESEncryptionProvider>("a6d2ae2816157e2b3c4fcf098815f7xb", ROCKSDB_NAMESPACE::EncryptionMethod::kAES256_CTR);
+    raw_env = NewEncryptedEnv(ROCKSDB_NAMESPACE::Env::Default(), encryption_provider);
 
-  Status s = Env::CreateFromUri(ConfigOptions(), FLAGS_env_uri, FLAGS_fs_uri,
+    env_guard.reset(raw_env);
+    fprintf(stdout, "Error: --env_uri and --fs_uri are mutually exclusive\n");
+  } else {
+        Status s = Env::CreateFromUri(ConfigOptions(), FLAGS_env_uri, FLAGS_fs_uri,
                                 &raw_env, &env_guard);
   if (!s.ok()) {
     fprintf(stderr, "Error Creating Env URI: %s: %s\n", FLAGS_env_uri.c_str(),
             s.ToString().c_str());
     exit(1);
   }
+    }
   dbsl_env_wrapper_guard = std::make_shared<CompositeEnvWrapper>(raw_env);
   db_stress_listener_env = dbsl_env_wrapper_guard.get();
 
@@ -222,7 +227,7 @@ int db_stress_tool(int argc, char** argv) {
     std::string default_secondaries_path;
     db_stress_env->GetTestDirectory(&default_secondaries_path);
     default_secondaries_path += "/dbstress_secondaries";
-    s = db_stress_env->CreateDirIfMissing(default_secondaries_path);
+    Status s = db_stress_env->CreateDirIfMissing(default_secondaries_path);
     if (!s.ok()) {
       fprintf(stderr, "Failed to create directory %s: %s\n",
               default_secondaries_path.c_str(), s.ToString().c_str());
